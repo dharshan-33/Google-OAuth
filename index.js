@@ -1,20 +1,14 @@
 const express = require("express");
 const passport = require("passport");
 const session = require("express-session");
-const path = require("path");
 const app = express();
 require("./auth");
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "client")));
 
 function isLoggedIn(req, res, next) {
   req.user ? next() : res.sendStatus(401);
 }
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "index.html"));
-});
 
 app.use(
   session({
@@ -35,24 +29,40 @@ app.get(
 
 app.get(
   "/auth/google/callback",
-  passport.authenticate("google", {
-    successRedirect: "/auth/google/protected",
-    failureRedirect: "/auth/google/failure",
-  })
+  passport.authenticate("google", { failureRedirect: "/auth/google/failure" }),
+  (req, res, next) => {
+    if (!req.user) {
+      return next(new Error("User not authenticated"));
+    }
+    res.json({
+      message: "Authentication successful",
+      user: req.user,
+    });
+  }
 );
 
 app.get("/auth/google/failure", (req, res) => {
-  res.send("SomeThing Went Wrong!");
+  res.status(401).json({
+    error: "Authentication failed",
+  });
 });
 
 app.get("/auth/google/protected", isLoggedIn, (req, res) => {
-  let name = req.user.displayName;
-  res.send(`Hello ${name}`);
+  res.json({
+    message: `Hello ${req.user.displayName}`,
+  });
 });
 
-app.use("/auth/google/logout", (req, res) => {
-  req.session.destroy();
-  res.send("Thank you!");
+app.post("/auth/google/logout", (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      return res.status(500).json({ error: "Failed to log out" });
+    }
+    req.session.destroy();
+    res.json({
+      message: "Logged out successfully",
+    });
+  });
 });
 
 app.listen(3000, () => {
